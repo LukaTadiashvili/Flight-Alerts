@@ -1,0 +1,57 @@
+name: Check cheap flights
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"   # every 6 hours (UTC)
+  workflow_dispatch: {}      # "Run workflow" button for a manual check
+
+permissions:
+  contents: write            # to commit state/state.json (price history, settings)
+
+concurrency:
+  group: flight-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Search flights and notify
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+        run: python -m flight_alerts
+
+      - name: Save state
+        if: always()
+        run: |
+          git config user.name "flight-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/state.json
+          if git diff --staged --quiet; then
+            echo "No state changes"
+          else
+            git commit -m "Update flight state"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push
+          fi
+
+  tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest && pytest -q
