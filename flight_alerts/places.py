@@ -61,6 +61,8 @@ AIRLINES = {
     "B2": "Belavia", "SZ": "Somon Air", "ZF": "Azur Air", "H9": "Himalaya Airlines",
     "OV": "SalamAir", "WY": "Oman Air", "J9": "Jazeera Airways", "KU": "Kuwait Airways",
     "GF": "Gulf Air", "SV": "Saudia", "XY": "flynas", "F3": "flyadeal", "LS": "Jet2",
+    "A4": "Azimuth", "3F": "FlyOne Armenia", "5F": "FlyOne", "WZ": "Red Wings", "U6": "Ural Airlines",
+    "EC": "easyJet Europe", "DS": "easyJet Switzerland", "RO": "TAROM", "FB": "Bulgaria Air",
     "PS": "UIA", "AZ": "ITA Airways", "AF": "Air France", "KL": "KLM", "LX": "Swiss",
 }
 

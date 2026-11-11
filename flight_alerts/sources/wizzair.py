@@ -99,15 +99,22 @@ class WizzAir:
 
     def _api(self) -> str:
         if not self.version:
-            try:
-                self.version = parse_version(self._req("GET", BUILD_URL).text)
-            except Blocked:
-                raise
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Wizz buildnumber failed: %s", exc)
+            # the version is in /buildnumber and also embedded in the home page
+            for url in (BUILD_URL, "https://wizzair.com/en-gb"):
+                try:
+                    resp = self._req("GET", url)
+                    self.version = parse_version(resp.text)
+                    if self.version:
+                        break
+                    snippet = " ".join(resp.text[:300].split())
+                    log.warning("No Wizz version in %s (HTTP %s): %r", url, resp.status_code, snippet)
+                except Blocked:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("Wizz %s failed: %s", url, exc)
             self.version = self.version or self.fallback_version
             if not self.version:
-                raise RuntimeError("Could not determine Wizz Air API version")
+                raise RuntimeError("Could not determine Wizz Air API version (site probably served a bot check)")
             log.info("Wizz Air API version %s", self.version)
         return API.format(ver=self.version)
 
