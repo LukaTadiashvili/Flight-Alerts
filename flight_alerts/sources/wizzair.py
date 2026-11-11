@@ -87,6 +87,7 @@ class WizzAir:
         self.fallback_version = fallback_version
         self.version: str | None = None
         self.requests_made = 0
+        self.busy = 0
 
     def _req(self, method: str, url: str, **kw) -> requests.Response:
         if self.requests_made:
@@ -95,6 +96,10 @@ class WizzAir:
         resp = self.session.request(method, url, headers=HEADERS, timeout=45, **kw)
         if resp.status_code in (403, 429):
             raise Blocked(f"Wizz Air answered {resp.status_code} — probably anti-bot protection")
+        # 503 = "slow down": after a few in a row, stop for this run instead of insisting
+        self.busy = self.busy + 1 if resp.status_code == 503 else 0
+        if self.busy >= 3:
+            raise Blocked("Wizz Air is answering 503 (busy) — stopped for this run")
         return resp
 
     def _api(self) -> str:
