@@ -29,6 +29,8 @@ const gel = (p) => `${Math.round(p)}₾`;
 // ------------------------------------------------------------------ state
 const S = { data: null, H: { legs: {}, roundtrips: {}, routes: {} }, legs: [], rts: [], trips: [], shown: 0, f: null };
 const PAGE = 60;
+const PRICE_CHIPS = [100, 150, 250, 300];
+const icon = (id, cls = "i") => `<svg class="${cls}"><use href="#i-${id}"/></svg>`;
 
 function place(code) { return (S.data && S.data.places[code]) || { city: code, name: code, country: "" }; }
 function cityOf(code) { return place(code).city || code; }
@@ -44,7 +46,7 @@ function defaults() {
   return {
     pmin: "", pmax: s.max_price_gel ?? 220, nmin: s.min_nights ?? 3, nmax: s.max_nights ?? 7,
     dfrom: "", dto: "", rfrom: "", rto: "", wd: [], orig: ["TBS", "KUT"], ret: ["TBS", "KUT"],
-    same: false, tr: s.max_transfers ?? 1, maxdur: "", alOff: [], q: "", perCity: true, sort: "price",
+    same: false, tr: s.max_transfers ?? 1, maxdur: "", alOff: [], q: "", dest: "", perCity: true, sort: "price",
   };
 }
 
@@ -98,6 +100,7 @@ function computeTrips(f, opts = {}) {
   const legOk = (l) => l.tr <= f.tr && !alOff.has(l.al) && (!maxdur || !l.dur || l.dur <= maxdur);
   const destOk = (x) => {
     if (opts.city) return cityOf(x) === opts.city;
+    if (f.dest && cityOf(x) !== f.dest) return false;
     if (!q) return true;
     const p = place(x);
     return [x, p.city, p.name, p.country].some((v) => String(v || "").toLowerCase().includes(q));
@@ -187,10 +190,9 @@ function tripHistory(t) {
 function trendHtml(t) {
   const h = tripHistory(t);
   if (!h || h.length < 2) return "";
-  const first = h[0][1], last = h[h.length - 1][1];
-  const diff = Math.round(last - first);
-  if (diff < 0) return `<div class="trend-down">▼ ${-diff}₾ ${fmtDate(h[0][0])}-დან</div>`;
-  if (diff > 0) return `<div class="trend-up">▲ ${diff}₾</div>`;
+  const diff = Math.round(h[h.length - 1][1] - h[0][1]);
+  if (diff < 0) return `<span class="pill green">−${-diff}₾ ${fmtDate(h[0][0])}-დან</span>`;
+  if (diff > 0) return `<span class="pill up">+${diff}₾</span>`;
   return "";
 }
 
@@ -293,18 +295,21 @@ function routeText(t) {
 function cardHtml(t, i) {
   const als = t.kind === "rt" ? [t.fare.al] : [...new Set([t.out.al, t.back.al])];
   const tr = t.kind === "rt" ? t.fare.tr : Math.max(t.out.tr, t.back.tr);
-  const tags = [
-    `<span class="tag">${esc(als.map(airline).join(" + "))}</span>`,
-    `<span class="tag ${tr === 0 ? "good" : ""}">${fmtTr(tr)}</span>`,
-    t.o !== t.rt ? `<span class="tag">${esc(nameOf(t.o))} → ${esc(nameOf(t.rt))}</span>` : "",
-    t.kind === "rt" ? `<span class="tag">ორმხრივი ბილეთი</span>` : "",
-  ].join("");
+  const route = t.o === t.rt && t.x === t.rf
+    ? `${t.o} ${icon("swap")} ${t.x}`
+    : `${t.o} ${icon("arrow")} ${t.x}${t.x !== t.rf ? ` · ${t.rf}` : ""} ${icon("arrow")} ${t.rt}`;
   return `<button class="card" type="button" data-i="${i}">
-      <div class="dest">${esc(nameOf(t.x))} <span class="muted small">${esc(place(t.x).country)}</span></div>
+      <div class="dest">${esc(nameOf(t.x))}<small>${esc(place(t.x).country)}</small></div>
       <div class="price">${gel(t.price)}</div>
-      <div class="meta">${fmtDateW(t.d)} → ${fmtDateW(t.r)} · ${t.n} ღამე · ${esc(routeText(t))}</div>
-      <div class="tags">${tags}</div>
-      ${trendHtml(t)}
+      <div class="dates">${fmtDateW(t.d)} – ${fmtDateW(t.r)}</div>
+      <div class="nights">${t.n} ღამე</div>
+      <div class="meta">
+        <span class="route">${route}</span>
+        <span>${esc(als.map(airline).join(" + "))}</span>
+        <span class="pill ${tr === 0 ? "green" : ""}">${fmtTr(tr)}</span>
+        ${t.kind === "rt" ? `<span class="pill">ერთიანი ბილეთი</span>` : ""}
+        ${trendHtml(t)}
+      </div>
     </button>`;
 }
 
@@ -317,28 +322,43 @@ function renderTrips(reset = true) {
   $("#more").hidden = S.shown >= S.trips.length;
   const n = S.trips.length;
   $("#resultCount").textContent = n ? `${n} ${S.f.perCity ? "მიმართულება" : "ვარიანტი"}` : "";
-  if (!n) $("#results").innerHTML = `<div class="empty">ამ ფილტრებით ფრენა ვერ მოიძებნა.<br>სცადე ფასის ზღვრის გაზრდა ან თარიღების გაფართოება.</div>`;
+  if (!n) $("#results").innerHTML = `<div class="empty">${icon("plane")}<br>ამ ფილტრებით ფრენა ვერ მოიძებნა.<br>სცადე მეტი თანხა ან სხვა თარიღები.</div>`;
   $("#sheetCount").textContent = `(${n})`;
   const active = activeFilterCount();
   $("#filterCount").hidden = !active; $("#filterCount").textContent = active;
-  renderQuickChips();
+  renderPriceRow();
+  renderDestSelect();
 }
 
 function activeFilterCount() {
   const d = defaults(), f = S.f;
   let c = 0;
-  for (const k of ["pmin", "pmax", "nmin", "nmax", "dfrom", "dto", "rfrom", "rto", "same", "tr", "maxdur", "q", "perCity"]) if (String(f[k]) !== String(d[k])) c++;
+  for (const k of ["pmin", "nmin", "nmax", "dfrom", "dto", "rfrom", "rto", "same", "tr", "maxdur", "q", "perCity"]) if (String(f[k]) !== String(d[k])) c++;
   if (f.wd.length) c++; if (f.alOff.length) c++;
   if (f.orig.length !== 2) c++; if (f.ret.length !== 2) c++;
   return c;
 }
 
-function renderQuickChips() {
-  const f = S.f;
-  const price = [150, 220, 300, 500].map((v) => `<button type="button" data-qp="${v}" aria-pressed="${+f.pmax === v}">≤${v}₾</button>`).join("");
-  $("#quickChips").innerHTML = price +
-    `<button type="button" data-qd aria-pressed="${f.tr === 0}">პირდაპირი</button>` +
-    `<button type="button" data-qc aria-pressed="${!f.perCity}">ყველა თარიღი</button>`;
+function renderPriceRow() {
+  const f = S.f, cur = f.pmax === "" || f.pmax == null ? "" : String(+f.pmax);
+  const custom = cur !== "" && !PRICE_CHIPS.includes(+cur);
+  const row = $("#priceRow");
+  const focused = document.activeElement && document.activeElement.id === "customPrice";
+  if (focused) return; // don't steal the keyboard while typing
+  row.innerHTML = PRICE_CHIPS.map((v) => `<button class="chip" type="button" data-qp="${v}" aria-pressed="${cur === String(v)}">${v}₾</button>`).join("") +
+    `<label class="chip-input ${custom ? "on" : ""}"><span class="sr-only">სხვა თანხა</span>
+       <input id="customPrice" type="number" inputmode="numeric" placeholder="სხვა თანხა" value="${custom ? cur : ""}"><span class="cur">₾</span></label>` +
+    `<button class="chip" type="button" data-qp="" aria-pressed="${cur === ""}">ნებისმიერი</button>`;
+}
+
+function renderDestSelect() {
+  const sel = $("#destSelect");
+  const per = computeTrips({ ...S.f, dest: "", perCity: true, sort: "price" });
+  const seen = new Set(per.map((t) => t.city));
+  const opts = per.map((t) => `<option value="${esc(t.city)}">${esc(nameOf(t.x))} · ${gel(t.price)}</option>`);
+  if (S.f.dest && !seen.has(S.f.dest)) opts.unshift(`<option value="${esc(S.f.dest)}">${esc(nameOf(S.f.dest))}</option>`);
+  sel.innerHTML = `<option value="">ყველა მიმართულება (${per.length})</option>` + opts.join("");
+  sel.value = S.f.dest || "";
 }
 
 // ------------------------------------------------------------------ detail
@@ -346,17 +366,17 @@ function legHtml(label, l) {
   const arrDate = l.arr ? l.arr.slice(0, 10) : "";
   const plus = arrDate && arrDate !== l.d ? `<sup>+${daysBetween(l.d, arrDate)}</sup>` : "";
   return `<div class="leg">
-    <div class="leg-head"><span>${label} · ${fmtDateW(l.d)}</span><span>${l.p != null ? gel(l.p) : ""}</span></div>
+    <div class="leg-head"><span><b>${label}</b> · ${fmtDateW(l.d)}</span><span>${l.p != null ? gel(l.p) : ""}</span></div>
     <div class="leg-times">
       <div><div class="t">${esc(l.t || "—")}</div><div class="code">${esc(l.o)} · ${esc(nameOf(l.o))}</div></div>
-      <div class="line">${l.est ? "≈ " : ""}${fmtDur(l.dur)}<br>${fmtTr(l.tr)}</div>
+      <div class="mid">${l.est ? "≈ " : ""}${fmtDur(l.dur)}<div class="bar">${icon("plane")}</div>${fmtTr(l.tr)}</div>
       <div style="text-align:right"><div class="t">${l.arr ? esc(l.arr.slice(11, 16)) + plus : "—"}</div><div class="code">${esc(l.x)} · ${esc(nameOf(l.x))}</div></div>
     </div>
     <dl>
-      <dt>ავიაკომპანია</dt><dd>${esc(airline(l.al))}${l.fn ? ` · რეისი ${esc(l.al)}${esc(l.fn)}` : ""}</dd>
-      <dt>ფრენის დრო</dt><dd>${l.dur ? fmtDur(l.dur) + (l.est ? " (სავარაუდო, ამ მარშრუტის საშუალო)" : "") + (l.tr ? " (გადაჯდომის ჩათვლით)" : "") : "უცნობია"}</dd>
-      ${arrDate ? `<dt>ჩაფრენა</dt><dd>${fmtDateW(arrDate)} ${esc(l.arr.slice(11, 16))} (ადგილობრივი დრო)</dd>` : ""}
-      ${l.src ? `<dt>წყარო</dt><dd>${l.src === "wizzair" ? "Wizz Air საიტი" : "Aviasales"}</dd>` : ""}
+      <dt>ავიაკომპანია</dt><dd>${esc(airline(l.al))}${l.fn ? ` · ${esc(l.al)} ${esc(l.fn)}` : ""}</dd>
+      <dt>ფრენის დრო</dt><dd>${l.dur ? fmtDur(l.dur) + (l.est ? " · სავარაუდო" : "") + (l.tr ? " · გადაჯდომის ჩათვლით" : "") : "უცნობია"}</dd>
+      ${arrDate ? `<dt>ჩაფრენა</dt><dd>${fmtDateW(arrDate)}, ${esc(l.arr.slice(11, 16))} ადგილობრივი დროით</dd>` : ""}
+      ${l.src ? `<dt>წყარო</dt><dd>${l.src === "wizzair" ? "wizzair.com" : "Aviasales"}</dd>` : ""}
     </dl>
   </div>`;
 }
@@ -368,12 +388,13 @@ function openDetail(t) {
     : [t.out, t.back];
   const sameAirports = t.o === t.rt && t.x === t.rf;
   const actions = t.kind === "rt"
-    ? [["🎫 დაჯავშნა", aviaLink(t.o, t.x, t.d, t.r)]]
+    ? [["დაჯავშნა", aviaLink(t.o, t.x, t.d, t.r), true]]
     : (t.out.src === "wizzair" && t.back.src === "wizzair" && sameAirports)
-      ? [["🎫 Wizz Air (ორივე)", wizzLink(t.o, t.x, t.d, t.r)]]
-      : [["🛫 წასვლის ბილეთი", legLink(t.out)], ["🛬 დაბრუნების ბილეთი", legLink(t.back)]];
-  if (sameAirports) actions.push(["🔎 Skyscanner", skyLink(t.o, t.x, t.d, t.r)], ["🔎 Google Flights", googleLink(t.o, t.x, t.d, t.r)]);
-  else actions.push(["🔎 Google (წასვლა)", googleLink(t.o, t.x, t.d)], ["🔎 Google (დაბრუნება)", googleLink(t.rf, t.rt, t.r)]);
+      ? [["დაჯავშნა Wizz Air-ზე", wizzLink(t.o, t.x, t.d, t.r), true]]
+      : [["წასვლის ბილეთი", legLink(t.out), true], ["დაბრუნების ბილეთი", legLink(t.back), true]];
+  if (sameAirports) actions.push(["Skyscanner", skyLink(t.o, t.x, t.d, t.r)], ["Google Flights", googleLink(t.o, t.x, t.d, t.r)]);
+  else actions.push(["Google · წასვლა", googleLink(t.o, t.x, t.d)], ["Google · დაბრუნება", googleLink(t.rf, t.rt, t.r)]);
+  const nPrimary = actions.filter((a) => a[2]).length;
 
   const others = computeTrips({ ...S.f, perCity: false, sort: "price" }, { city: t.city })
     .filter((o) => !(o.d === t.d && o.r === t.r && o.o === t.o && o.rt === t.rt)).slice(0, 6);
@@ -381,24 +402,26 @@ function openDetail(t) {
   const h = tripHistory(t);
   const vals = h ? h.map((p) => p[1]) : [];
 
-  $("#detailTitle").textContent = `${nameOf(t.x)} · ${gel(t.price)}`;
+  $("#detailTitle").textContent = nameOf(t.x);
   $("#detailBody").innerHTML = `
-    <div class="total"><div><div class="muted small">${fmtDateW(t.d)} → ${fmtDateW(t.r)}</div><div>${t.n} ღამე · ${esc(routeText(t))}</div></div><div class="price">${gel(t.price)}</div></div>
-    <div class="legs">${legHtml("🛫 წასვლა", legs[0])}${legHtml("🛬 დაბრუნება", legs[1])}</div>
-    ${t.kind === "rt" ? `<p class="muted small">ეს ერთიანი ორმხრივი ბილეთია — ფასი ორივე მიმართულებისაა.</p>` : ""}
-    <div class="actions">${actions.map(([l, u]) => `<a class="btn" href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join("")}</div>
-    <p class="muted small">ფასი ერთ მგზავრზეა, ბარგის გარეშე. დაჯავშნამდე გადაამოწმე საიტზე.</p>
+    <div class="trip-head">
+      <div><div class="when">${fmtDateW(t.d)} – ${fmtDateW(t.r)}</div><div class="muted small">${t.n} ღამე · ${esc(routeText(t))}</div></div>
+      <div class="price">${gel(t.price)}</div>
+    </div>
+    <div class="legs">${legHtml("წასვლა", legs[0])}${legHtml("დაბრუნება", legs[1])}</div>
+    ${t.kind === "rt" ? `<p class="note">ერთიანი ორმხრივი ბილეთი — ფასი ორივე მიმართულებისაა.</p>` : ""}
+    <div class="actions">${actions.map(([l, u, primary]) => `<a class="btn ${primary ? "primary" : ""}" ${primary && nPrimary === 2 ? 'style="grid-column:auto"' : ""} href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join("")}</div>
+    <p class="note">ფასი ერთ მგზავრზეა, ბარგის გარეშე. დაჯავშნამდე გადაამოწმე საიტზე.</p>
     <div class="panel">
-      <h3>📈 ფასის ისტორია ამ თარიღებზე</h3>
-      ${vals.length ? `<div class="stats"><span>მინ. <b>${gel(Math.min(...vals))}</b></span><span>მაქს. <b>${gel(Math.max(...vals))}</b></span><span>პირველად: <b>${fmtDate(h[0][0])}</b></span></div>` : ""}
+      <h3>ფასის ისტორია ამ თარიღებზე</h3>
+      ${vals.length ? `<div class="stats"><span>მინიმუმი<b>${gel(Math.min(...vals))}</b></span><span>მაქსიმუმი<b>${gel(Math.max(...vals))}</b></span><span>ვაკვირდებით<b>${fmtDate(h[0][0])}-დან</b></span></div>` : ""}
       <div id="tripChart"></div>
-      <p class="muted small">თითოეული დღის ყველაზე დაბალი ფასი ამ მარშრუტსა და თარიღებზე.</p>
     </div>
     <div class="panel">
-      <h3>📈 ${esc(nameOf(t.x))} — ყველაზე იაფი მოგზაურობა დღეების მიხედვით</h3>
+      <h3>${esc(nameOf(t.x))} · ყველაზე იაფი მოგზაურობა დღეების მიხედვით</h3>
       <div id="cityChart"></div>
     </div>
-    ${others.length ? `<h3 style="margin-top:14px">სხვა თარიღები — ${esc(nameOf(t.x))}</h3><div class="cards" id="othersList">${others.map((o, i) => cardHtml(o, i)).join("")}</div>` : ""}
+    ${others.length ? `<h3 style="margin:20px 2px 0">სხვა თარიღები</h3><div class="cards" id="othersList">${others.map((o, i) => cardHtml(o, i)).join("")}</div>` : ""}
   `;
   const ref = S.data.settings && S.data.settings.max_price_gel;
   renderChart($("#tripChart"), h, { ref, endDay: S.H.updated });
@@ -413,12 +436,12 @@ function openCityHistory(city) {
   const vals = s.map((p) => p[1]);
   $("#detailTitle").textContent = nameOf(city);
   $("#detailBody").innerHTML = `
-    <div class="stats"><span>ახლა <b>${gel(vals[vals.length - 1])}</b></span><span>მინ. <b>${gel(Math.min(...vals))}</b></span><span>მაქს. <b>${gel(Math.max(...vals))}</b></span></div>
+    <div class="stats"><span>ახლა<b>${gel(vals[vals.length - 1])}</b></span><span>მინიმუმი<b>${gel(Math.min(...vals))}</b></span><span>მაქსიმუმი<b>${gel(Math.max(...vals))}</b></span></div>
     <div id="cityChart"></div>
-    <button class="btn primary wide" id="showCityTrips" type="button">ფრენების ნახვა — ${esc(nameOf(city))}</button>`;
+    <button class="btn primary wide" id="showCityTrips" type="button">ფრენების ნახვა</button>`;
   renderChart($("#cityChart"), s, { ref: S.data.settings && S.data.settings.max_price_gel, endDay: S.H.updated });
   $("#showCityTrips").onclick = () => {
-    S.f.q = place(city).name && place(city).name !== city ? place(city).name : city;
+    S.f.dest = city; S.f.q = "";
     S.f.perCity = false; saveFilters(); syncForm(); renderTrips(); $("#detailSheet").close(); switchTab("trips");
   };
   $("#detailSheet").showModal();
@@ -432,22 +455,20 @@ function renderHistory() {
     .map(([c, s]) => ({ c, s, now: s[s.length - 1][1], min: Math.min(...s.map((p) => p[1])) }))
     .sort((a, b) => a.now - b.now);
   $("#historyList").innerHTML = items.length ? items.map((it) => `
-    <button class="card" type="button" data-city="${esc(it.c)}">
+    <button class="card hist-card" type="button" data-city="${esc(it.c)}">
       <div class="dest">${esc(nameOf(it.c))}</div>
-      <div class="price">${gel(it.now)}</div>
-      <div class="meta">ყველაზე დაბალი: ${gel(it.min)} · ისტორია ${fmtDate(it.s[0][0])}-დან</div>
-      <div class="tags">${sparkline(it.s)}</div>
-    </button>`).join("") : `<div class="empty">ისტორია ჯერ არ დაგროვილა — რამდენიმე შემოწმების შემდეგ გამოჩნდება.</div>`;
+      ${sparkline(it.s)}
+      <div class="dates"><span class="price" style="font-size:16px">${gel(it.now)}</span> <span class="muted small">· მინ. ${gel(it.min)} · ${fmtDate(it.s[0][0])}-დან</span></div>
+    </button>`).join("") : `<div class="empty">${icon("chart")}<br>ისტორია რამდენიმე შემოწმების შემდეგ გამოჩნდება.</div>`;
 }
 
 // ------------------------------------------------------------------ settings tab
 function renderSettings() {
   const s = (S.data && S.data.settings) || {};
   $("#currentSettings").innerHTML = S.data ? `
-    <h3>ამჟამად (ბოლო შემოწმებისას)</h3>
-    <div class="stats">
-      <span>${s.paused ? "⏸ პაუზა" : "▶️ აქტიური"}</span><span>ზღვარი <b>${s.max_price_gel}₾</b></span>
-      <span>ღამე <b>${s.min_nights}–${s.max_nights}</b></span><span>${s.max_transfers === 0 ? "მხოლოდ პირდაპირი" : `მაქს. ${s.max_transfers} გადაჯდომა`}</span>
+    <div class="stats" style="margin:0">
+      <span>სტატუსი<b>${s.paused ? "პაუზაზე" : "აქტიური"}</b></span><span>ზღვარი<b>${s.max_price_gel}₾</b></span>
+      <span>ღამეები<b>${s.min_nights}–${s.max_nights}</b></span><span>გადაჯდომა<b>${s.max_transfers === 0 ? "არა" : `მაქს. ${s.max_transfers}`}</b></span>
     </div>` : "";
   $("#setPrice").value = s.max_price_gel ?? "";
   $("#setNMin").value = s.min_nights ?? "";
@@ -458,7 +479,7 @@ function renderSettings() {
     const errs = Object.entries(S.data.errors || {});
     $("#dataInfo").innerHTML = `ბოლო განახლება: ${esc(S.data.generated.replace("T", " "))}<br>
       ერთი მიმართულების ფასები: ${S.legs.length} · ორმხრივი ბილეთები: ${S.rts.length}<br>
-      ${errs.length ? `⚠️ პრობლემა: ${errs.map(([k, v]) => `${esc(k)} — ${esc(v)}`).join("<br>")}` : "✅ ყველა წყარო მუშაობს"}`;
+      ${errs.length ? `პრობლემა: ${errs.map(([k, v]) => `${esc(k)} — ${esc(v)}`).join("<br>")}` : "ყველა წყარო მუშაობს"}`;
   }
 }
 
@@ -477,9 +498,9 @@ async function sendCommand(cmd) {
   try {
     const r = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}-settings`, { method: "POST", body });
     if (!r.ok) throw new Error(r.status);
-    out.textContent = `✅ გაიგზავნა: «${body}». ამოქმედდება შემდეგ შემოწმებაზე.`;
+    out.textContent = `გაიგზავნა: «${body}». ამოქმედდება შემდეგ შემოწმებაზე.`;
   } catch (e) {
-    out.textContent = `❌ ვერ გაიგზავნა (${e.message}).`;
+    out.textContent = `ვერ გაიგზავნა (${e.message}).`;
   }
 }
 
@@ -506,12 +527,13 @@ function buildForm() {
   form.elements.nmin.innerHTML = opts; form.elements.nmax.innerHTML = opts;
   $("#weekdays").innerHTML = WD_ORDER.map((d) => `<button type="button" data-v="${d}">${WD[d]}</button>`).join("");
   const origins = (S.data && S.data.origins) || ["TBS", "KUT"];
-  for (const k of ["orig", "ret"]) $(`[data-multi=${k}]`).innerHTML = origins.map((o) => `<button type="button" data-v="${o}">${esc(nameOf(o))} (${o})</button>`).join("");
+  for (const k of ["orig", "ret"]) $(`[data-multi=${k}]`).innerHTML = origins.map((o) => `<button type="button" data-v="${o}">${esc(nameOf(o))}</button>`).join("");
   // airlines sorted by how many prices they have
   const count = {};
   for (const l of S.legs) count[l.al] = (count[l.al] || 0) + 1;
   for (const r of S.rts) count[r.al] = (count[r.al] || 0) + 1;
   const als = Object.keys(count).filter(Boolean).sort((a, b) => count[b] - count[a]);
+  $("#destList").innerHTML = Object.entries(S.data.cities || {}).map(([c, n]) => `<option value="${esc(n)}">${esc(c)}</option>`).join("");
   $("[data-multi=al]").innerHTML = als.map((a) => `<button type="button" data-v="${esc(a)}">${esc(airline(a))}</button>`).join("");
   const today = iso(Date.now());
   for (const k of ["dfrom", "dto", "rfrom", "rto"]) form.elements[k].min = today;
@@ -556,7 +578,7 @@ function effectiveTheme() {
 }
 function paintThemeBtn() {
   const dark = effectiveTheme() === "dark";
-  $("#themeBtn").textContent = dark ? "☀️" : "🌙";
+  $("#themeBtn").innerHTML = icon(dark ? "sun" : "moon");
   $("#themeBtn").setAttribute("aria-label", dark ? "ღია რეჟიმი" : "მუქი რეჟიმი");
 }
 function switchTab(name) {
@@ -610,13 +632,18 @@ async function main() {
   $("#more").onclick = () => renderTrips(false);
   $("#results").addEventListener("click", (e) => { const c = e.target.closest(".card"); if (c) openDetail(S.trips[+c.dataset.i]); });
   $("#detailBody").addEventListener("click", (e) => { const c = e.target.closest("#othersList .card"); if (c) openDetail(S.others[+c.dataset.i]); });
-  $("#quickChips").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.qp) S.f.pmax = +S.f.pmax === +b.dataset.qp ? "" : b.dataset.qp;
-    if ("qd" in b.dataset) S.f.tr = S.f.tr === 0 ? 1 : 0;
-    if ("qc" in b.dataset) S.f.perCity = !S.f.perCity;
-    saveFilters(); syncForm(); renderTrips();
+  $("#priceRow").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-qp]"); if (!b) return;
+    S.f.pmax = b.dataset.qp; saveFilters(); syncForm(); renderTrips();
   });
+  let pt;
+  $("#priceRow").addEventListener("input", (e) => {
+    if (e.target.id !== "customPrice") return;
+    clearTimeout(pt);
+    pt = setTimeout(() => { S.f.pmax = e.target.value; e.target.parentElement.classList.toggle("on", !!e.target.value); saveFilters(); syncForm(); renderTrips(); }, 300);
+  });
+  $("#priceRow").addEventListener("focusout", () => setTimeout(renderPriceRow, 0));
+  $("#destSelect").onchange = (e) => { S.f.dest = e.target.value; if (S.f.dest) S.f.perCity = false; else S.f.perCity = true; saveFilters(); syncForm(); renderTrips(); };
   renderTrips();
   openFromHash();
   addEventListener("hashchange", openFromHash);
