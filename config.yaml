@@ -26,6 +26,8 @@ sources:
   travelpayouts:
     enabled: true              # საჭიროა TRAVELPAYOUTS_TOKEN (GitHub Secret)
     currency: eur
+    per_route: true            # თითოეულ მარშრუტზე ცალკე ძებნა (ყველა ავიაკომპანია, ყველა თარიღი)
+    max_routes: 200
   wizzair:
     enabled: true
     window_days: 42            # ერთ მოთხოვნაში რამდენი დღე

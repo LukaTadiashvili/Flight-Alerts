@@ -91,6 +91,31 @@ def send_settings_reply(ntfy: Ntfy, replies: list[str], settings: Settings) -> N
 
 # ---------------------------------------------------------------- collecting
 
+def per_route_search(tp: Travelpayouts, origins: list[str], seen: list[Flight], max_routes: int) -> list[Flight]:
+    """Ask for every route separately: the 'to anywhere' search only returns the
+    cheapest few hundred fares, per-route queries return every cached date and airline."""
+    pairs: set[tuple[str, str]] = set()
+    try:
+        pairs = tp.route_pairs(origins)
+        log.info("Route list: %d nonstop routes from %s", len(pairs), "/".join(origins))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Route list unavailable, using destinations found so far: %s", exc)
+    for f in seen:  # also routes that appeared in the broad search (incl. with transfers)
+        if f.origin in origins and f.destination not in origins:
+            pairs.add((f.origin, f.destination))
+        elif f.destination in origins and f.origin not in origins:
+            pairs.add((f.destination, f.origin))
+    out: list[Flight] = []
+    for o, x in sorted(pairs)[:max_routes]:
+        for a, b in ((o, x), (x, o)):
+            try:
+                out += tp.route(a, b)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Travelpayouts %s-%s: %s", a, b, exc)
+    return out
+
+
+
 def collect(cfg: dict, settings: Settings, conv: Converter, session: requests.Session,
             state: dict, today: date) -> tuple[list[Flight], list[Deal], dict[str, str]]:
     origins = cfg["origins"]
@@ -114,7 +139,12 @@ def collect(cfg: dict, settings: Settings, conv: Converter, session: requests.Se
                         flights += tp.outbound(o, month)
                         flights += tp.inbound(o, month)
                         round_trips += tp.round_trips(o, month)
-                log.info("Travelpayouts: %d requests", tp.requests_made)
+                broad = len(flights)
+                log.info("Travelpayouts broad search: %d requests, %d prices", tp.requests_made, broad)
+                if tp_cfg.get("per_route", True):
+                    flights += per_route_search(tp, origins, flights, int(tp_cfg.get("max_routes", 200)))
+                    log.info("Travelpayouts per-route: +%d prices (%d requests total)",
+                             len(flights) - broad, tp.requests_made)
             except Exception as exc:  # noqa: BLE001
                 log.exception("Travelpayouts failed")
                 errors["travelpayouts"] = str(exc)[:200]
@@ -305,7 +335,8 @@ def run() -> int:
         log.exception("Export for the app failed")
 
     sent = notify_deals(best, ntfy, places, conv, settings, state, cfg.get("notifications", {}), now)
-    enabled = [s for s, c in cfg.get("sources", {}).items() if c.get("enabled", True)]
+    # Wizz Air direct is best-effort (its fares also come through Travelpayouts) — no alerts for it
+    enabled = [s for s, c in cfg.get("sources", {}).items() if c.get("enabled", True) and s != "wizzair"]
     report_source_health(errors, state, ntfy, enabled)
 
     # prune old notification records

@@ -170,3 +170,39 @@ def test_export_and_history(tmp_path):
     assert hist["legs"]["KUT|BUD|2026-12-05"] == [["2026-11-10", 100], ["2026-11-12", 80]]  # changes only
     assert hist["routes"]["BUD"][-1] == ["2026-11-12", 130]
     assert data["cities"]["BUD"] == "Budapest"
+
+
+def test_route_pairs_and_route():
+    class S:
+        def get(self, url, params=None, headers=None, timeout=None):
+            if "routes.json" in url:
+                return FakeResp([
+                    {"airline_iata": "W6", "departure_airport_iata": "KUT", "arrival_airport_iata": "BUD", "codeshare": False},
+                    {"airline_iata": "TK", "departure_airport_iata": "TBS", "arrival_airport_iata": "IST", "codeshare": False},
+                    {"airline_iata": "XX", "departure_airport_iata": "TBS", "arrival_airport_iata": "IST", "codeshare": True},
+                    {"airline_iata": "A9", "departure_airport_iata": "TBS", "arrival_airport_iata": "KUT", "codeshare": False},
+                    {"airline_iata": "LH", "departure_airport_iata": "MUC", "arrival_airport_iata": "TBS", "codeshare": False},
+                ])
+            return FakeResp({"success": True, "data": [
+                {"origin_airport": params["origin"], "destination_airport": params["destination"], "price": 30,
+                 "airline": "W6", "departure_at": "2026-12-05T06:00:00+04:00", "transfers": 0}]})
+    tp = Travelpayouts(S(), "t", Converter({"EUR": 3.0}))
+    assert tp.route_pairs(["TBS", "KUT"]) == {("KUT", "BUD"), ("TBS", "IST")}
+    fl = tp.route("BUD", "KUT")
+    assert fl[0].origin == "BUD" and fl[0].price_gel == 90
+
+
+def test_per_route_search_uses_seen_destinations():
+    from flight_alerts.main import per_route_search
+
+    class TP:
+        def __init__(self):
+            self.calls = []
+        def route_pairs(self, origins):
+            raise RuntimeError("offline")
+        def route(self, a, b):
+            self.calls.append((a, b))
+            return []
+    tp = TP()
+    per_route_search(tp, ["TBS", "KUT"], [f("TBS", "BER", 0, 50), f("ATH", "KUT", 3, 50)], 200)
+    assert set(tp.calls) == {("TBS", "BER"), ("BER", "TBS"), ("KUT", "ATH"), ("ATH", "KUT")}

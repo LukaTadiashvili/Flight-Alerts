@@ -6,6 +6,7 @@ Endpoint: GET https://api.travelpayouts.com/aviasales/v3/prices_for_dates
 from __future__ import annotations
 
 import logging
+import time
 from datetime import date, datetime
 
 import requests
@@ -16,6 +17,7 @@ from ..models import Deal, Flight
 log = logging.getLogger(__name__)
 
 URL = "https://api.travelpayouts.com/aviasales/v3/prices_for_dates"
+ROUTES_URL = "https://api.travelpayouts.com/data/routes.json"  # public list of all airline routes
 SITE = "https://www.aviasales.com"
 
 
@@ -63,14 +65,18 @@ class Travelpayouts:
         self.currency = currency.lower()
         self.requests_made = 0
 
-    def _get(self, **params) -> list[dict]:
+    def _get(self, max_pages: int = 3, **params) -> list[dict]:
         params = {k: v for k, v in params.items() if v is not None}
         params.update(currency=self.currency, sorting="price", limit=1000, unique="false")
         all_items: list[dict] = []
-        for page in range(1, 4):  # up to 3000 rows per query
+        for page in range(1, max_pages + 1):  # up to 1000 rows per page
             params["page"] = page
-            resp = self.session.get(URL, params=params, headers={"X-Access-Token": self.token}, timeout=45)
-            self.requests_made += 1
+            for attempt in range(4):
+                resp = self.session.get(URL, params=params, headers={"X-Access-Token": self.token}, timeout=45)
+                self.requests_made += 1
+                if resp.status_code != 429:
+                    break
+                time.sleep(5 * (attempt + 1))  # API rate limit — wait and retry
             if resp.status_code == 401:
                 raise RuntimeError("Travelpayouts token is invalid (401)")
             resp.raise_for_status()
@@ -116,6 +122,22 @@ class Travelpayouts:
     def inbound(self, destination: str, month: str) -> list[Flight]:
         """Cheapest one-way flights from anywhere to `destination` in a given month."""
         items = self._get(destination=destination, departure_at=month, one_way="true")
+        return [f for f in map(self._flight, items) if f]
+
+    def route_pairs(self, origins: list[str]) -> set[tuple[str, str]]:
+        """Every (origin, destination) airport pair any airline flies nonstop from our airports."""
+        pairs: set[tuple[str, str]] = set()
+        resp = self.session.get(ROUTES_URL, timeout=90)
+        resp.raise_for_status()
+        for r in resp.json():
+            o, x = r.get("departure_airport_iata"), r.get("arrival_airport_iata")
+            if o in origins and x and x not in origins and not r.get("codeshare"):
+                pairs.add((o, x))
+        return pairs
+
+    def route(self, origin: str, destination: str) -> list[Flight]:
+        """All cached one-way prices on one route, any date (cheapest first)."""
+        items = self._get(max_pages=1, origin=origin, destination=destination, one_way="true")
         return [f for f in map(self._flight, items) if f]
 
     def round_trips(self, origin: str, month: str) -> list[Deal]:
