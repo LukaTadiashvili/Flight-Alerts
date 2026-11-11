@@ -66,9 +66,11 @@ def parse_timetable(body: dict, conv: Converter) -> list[Flight]:
             except ValueError:
                 continue
             o, x = f.get("departureStation", ""), f.get("arrivalStation", "")
+            times = [t for t in (f.get("departureDates") or []) if isinstance(t, str) and len(t) >= 16]
             flights.append(Flight(
                 origin=o, destination=x, depart=d, price_gel=gel, airline="W6",
                 transfers=0, link=booking_link(o, x, d), source="wizzair",
+                dep_time=times[0][11:16] if times else "",
             ))
     return flights
 

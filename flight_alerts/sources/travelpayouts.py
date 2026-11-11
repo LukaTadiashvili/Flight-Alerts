@@ -31,6 +31,21 @@ def _parse_date(value: str | None) -> date | None:
             return None
 
 
+def _time(value: str | None) -> str:
+    """Local "HH:MM" from an ISO timestamp with offset (the offset is the airport's local one)."""
+    if value and len(value) >= 16 and value[10] == "T":
+        return value[11:16]
+    return ""
+
+
+def _int(value) -> int | None:
+    try:
+        v = int(value)
+        return v if v > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _link(item: dict) -> str:
     link = item.get("link") or ""
     if link.startswith("/"):
@@ -88,6 +103,9 @@ class Travelpayouts:
             transfers=int(item.get("transfers") or 0),
             link=_link(item),
             source=self.name,
+            dep_time=_time(item.get("departure_at")),
+            duration_min=_int(item.get("duration_to") or item.get("duration")),
+            flight_number=str(item.get("flight_number") or ""),
         )
 
     def outbound(self, origin: str, month: str) -> list[Flight]:
@@ -117,5 +135,8 @@ class Travelpayouts:
                 airlines=(it.get("airline", ""),),
                 transfers=max(int(it.get("transfers") or 0), int(it.get("return_transfers") or 0)),
                 link=_link(it), source=self.name,
+                dep_time=_time(it.get("departure_at")), ret_time=_time(it.get("return_at")),
+                duration_to=_int(it.get("duration_to")), duration_back=_int(it.get("duration_back")),
+                flight_number=str(it.get("flight_number") or ""),
             ))
         return deals

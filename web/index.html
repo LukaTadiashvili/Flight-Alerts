@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ka">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>იაფი ფრენები</title>
+<meta name="description" content="იაფი ფრენები თბილისიდან და ქუთაისიდან — ფილტრები და ფასების ისტორია">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ფრენები">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+<script>
+  // apply saved theme before first paint (no flash)
+  try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">✈️</span>
+    <div>
+      <h1>იაფი ფრენები</h1>
+      <p class="muted small" id="updated">იტვირთება…</p>
+    </div>
+  </div>
+  <button class="icon-btn" id="themeBtn" type="button" aria-label="თემის შეცვლა" title="ღია / მუქი"></button>
+</header>
+
+<main>
+  <!-- TRIPS -->
+  <section id="tab-trips" class="tab active" aria-labelledby="nav-trips">
+    <div class="toolbar">
+      <button class="btn" id="openFilters" type="button">⚙︎ ფილტრები <span class="badge" id="filterCount" hidden></span></button>
+      <label class="select-wrap">
+        <span class="sr-only">დალაგება</span>
+        <select id="sort">
+          <option value="price">იაფიდან</option>
+          <option value="date">თარიღით</option>
+          <option value="duration">ფრენის დროით</option>
+          <option value="nights">ღამეებით</option>
+        </select>
+      </label>
+    </div>
+    <div class="chips-row" id="quickChips"></div>
+    <p class="muted small" id="resultCount"></p>
+    <div id="results" class="cards"></div>
+    <button class="btn wide" id="more" type="button" hidden>მეტის ჩვენება</button>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="tab-history" class="tab" aria-labelledby="nav-history">
+    <h2>ფასების ისტორია მიმართულებებით</h2>
+    <p class="muted small">ყველაზე იაფი წასვლა-დაბრუნება თითოეულ ქალაქში, დღეების მიხედვით (შენი ღამეების პარამეტრით).</p>
+    <input class="input" id="histSearch" type="search" placeholder="ქალაქის ძებნა…">
+    <div id="historyList" class="cards"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab" aria-labelledby="nav-settings">
+    <h2>შეტყობინებების პარამეტრები</h2>
+    <p class="muted small">აქ შეცვლილი პარამეტრები ntfy-ით იგზავნება და ძალაში შედის <b>შემდეგ შემოწმებაზე</b> (≤ 6 სთ).</p>
+    <div class="panel">
+      <label class="field">ntfy თემა (topic)
+        <input class="input" id="topic" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="მაგ. luka-flights-8x3k29qz">
+      </label>
+      <p class="muted small">ინახება მხოლოდ ამ ტელეფონში.</p>
+    </div>
+    <div class="panel" id="currentSettings"></div>
+    <div class="panel">
+      <label class="field">ფასის ზღვარი (წასვლა+დაბრუნება, ₾)
+        <div class="row"><input class="input" id="setPrice" type="number" inputmode="numeric" min="20" step="10"><button class="btn primary" data-cmd="price" type="button">შენახვა</button></div>
+      </label>
+      <label class="field">ღამეები
+        <div class="row">
+          <input class="input" id="setNMin" type="number" inputmode="numeric" min="1" max="30">
+          <span>–</span>
+          <input class="input" id="setNMax" type="number" inputmode="numeric" min="1" max="30">
+          <button class="btn primary" data-cmd="nights" type="button">შენახვა</button>
+        </div>
+      </label>
+      <label class="field">გადაჯდომები
+        <div class="row">
+          <select class="input" id="setTr"><option value="0">მხოლოდ პირდაპირი</option><option value="1">მაქს. 1</option><option value="2">მაქს. 2</option></select>
+          <button class="btn primary" data-cmd="transfers" type="button">შენახვა</button>
+        </div>
+      </label>
+      <div class="row">
+        <button class="btn" data-cmd="pause" type="button">⏸ პაუზა</button>
+        <button class="btn" data-cmd="resume" type="button">▶️ ჩართვა</button>
+        <button class="btn" data-cmd="status" type="button">ℹ️ სტატუსი</button>
+      </div>
+      <p class="small" id="sendResult" role="status"></p>
+    </div>
+    <div class="panel">
+      <h3>მონაცემები</h3>
+      <div id="dataInfo" class="muted small"></div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar" aria-label="ნავიგაცია">
+  <button id="nav-trips" class="active" data-tab="trips" type="button"><span aria-hidden="true">🔎</span>ფრენები</button>
+  <button id="nav-history" data-tab="history" type="button"><span aria-hidden="true">📈</span>ისტორია</button>
+  <button id="nav-settings" data-tab="settings" type="button"><span aria-hidden="true">🔔</span>პარამეტრები</button>
+</nav>
+
+<!-- FILTER SHEET -->
+<dialog id="filterSheet" class="sheet" aria-labelledby="filterTitle">
+  <form method="dialog" class="sheet-body" id="filterForm">
+    <div class="sheet-head">
+      <h2 id="filterTitle">ფილტრები</h2>
+      <button class="icon-btn" value="close" aria-label="დახურვა">✕</button>
+    </div>
+
+    <fieldset>
+      <legend>ფასი (ჯამში, ₾)</legend>
+      <div class="row">
+        <input class="input" name="pmin" type="number" inputmode="numeric" placeholder="მინ.">
+        <span>–</span>
+        <input class="input" name="pmax" type="number" inputmode="numeric" placeholder="მაქს.">
+      </div>
+      <div class="chips" data-preset="pmax">
+        <button type="button" data-v="100">≤100₾</button><button type="button" data-v="150">≤150₾</button>
+        <button type="button" data-v="200">≤200₾</button><button type="button" data-v="220">≤220₾</button>
+        <button type="button" data-v="300">≤300₾</button><button type="button" data-v="500">≤500₾</button>
+        <button type="button" data-v="">ყველა</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>ღამეები</legend>
+      <div class="row">
+        <select class="input" name="nmin"></select><span>–</span><select class="input" name="nmax"></select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>წასვლის თარიღი</legend>
+      <div class="row"><input class="input" name="dfrom" type="date"><span>–</span><input class="input" name="dto" type="date"></div>
+      <div class="chips" id="weekdays" data-multi="wd"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>დაბრუნების თარიღი</legend>
+      <div class="row"><input class="input" name="rfrom" type="date"><span>–</span><input class="input" name="rto" type="date"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>აეროპორტები</legend>
+      <p class="muted small">გაფრენა</p>
+      <div class="chips" data-multi="orig"></div>
+      <p class="muted small">დაბრუნება</p>
+      <div class="chips" data-multi="ret"></div>
+      <label class="check"><input type="checkbox" name="same"> იმავე აეროპორტში დაბრუნება</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>გადაჯდომები</legend>
+      <div class="chips" data-single="tr">
+        <button type="button" data-v="0">პირდაპირი</button><button type="button" data-v="1">≤ 1</button><button type="button" data-v="2">≤ 2</button>
+      </div>
+      <label class="field">მაქს. ფრენის დრო ერთ მიმართულებაზე
+        <select class="input" name="maxdur">
+          <option value="">ნებისმიერი</option><option value="180">3 სთ</option><option value="300">5 სთ</option>
+          <option value="480">8 სთ</option><option value="720">12 სთ</option><option value="1080">18 სთ</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>ავიაკომპანიები</legend>
+      <div class="row small"><button type="button" class="link" id="alAll">ყველა</button><button type="button" class="link" id="alNone">არცერთი</button></div>
+      <div class="chips" data-multi="al"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>მიმართულება</legend>
+      <input class="input" name="q" type="search" placeholder="ქალაქი, აეროპორტი ან ქვეყნის კოდი (მაგ. IT)">
+      <label class="check"><input type="checkbox" name="perCity"> მხოლოდ ყველაზე იაფი თითო ქალაქზე</label>
+    </fieldset>
+
+    <div class="sheet-foot">
+      <button class="btn" type="button" id="resetFilters">გასუფთავება</button>
+      <button class="btn primary" value="close">ნახვა <span id="sheetCount"></span></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- DETAIL SHEET -->
+<dialog id="detailSheet" class="sheet" aria-labelledby="detailTitle">
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <h2 id="detailTitle"></h2>
+      <button class="icon-btn" id="closeDetail" type="button" aria-label="დახურვა">✕</button>
+    </div>
+    <div id="detailBody"></div>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

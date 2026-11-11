@@ -15,6 +15,7 @@ import yaml
 
 from .combine import best_per_destination, combine_one_ways, filter_round_trips
 from .currency import Converter, load_converter
+from .export import export_all
 from .models import Deal, Flight
 from .ntfy import Ntfy
 from .places import Places, airline_name
@@ -187,6 +188,14 @@ def should_notify(d: Deal, places: Places, state: dict, ncfg: dict, now: datetim
     return False
 
 
+def app_link(d: Deal) -> str:
+    base = os.environ.get("APP_URL", "").strip()
+    if not base:
+        return ""
+    return (f"{base.rstrip('/')}/#trip={d.origin}.{d.destination}.{d.depart.isoformat()}"
+            f".{d.return_from}.{d.return_to}.{d.ret.isoformat()}")
+
+
 def notify_deals(deals: list[Deal], ntfy: Ntfy, places: Places, conv: Converter, settings: Settings,
                  state: dict, ncfg: dict, now: datetime) -> int:
     fresh = [d for d in deals if should_notify(d, places, state, ncfg, now)]
@@ -196,8 +205,10 @@ def notify_deals(deals: list[Deal], ntfy: Ntfy, places: Places, conv: Converter,
 
     for d in fresh[:limit]:
         title, body = deal_message(d, places, conv, settings)
-        actions = [{"action": "view", "label": label, "url": url, "clear": False}
-                   for label, url in d.extra_links[:2]]
+        links = list(d.extra_links[:2])
+        if app_link(d):
+            links = links[:1] + [("📊 დეტალები", app_link(d))]
+        actions = [{"action": "view", "label": label, "url": url, "clear": False} for label, url in links]
         ntfy.send(title, body, tags=["airplane"], priority=5 if d.price_gel <= urgent else 4,
                   click=d.link, actions=actions)
         notified[places.city(d.destination)] = {
@@ -238,7 +249,8 @@ def report_source_health(errors: dict[str, str], state: dict, ntfy: Ntfy, source
 def run() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
-    state_path = ROOT / "state" / "state.json"
+    data_dir = Path(os.environ.get("DATA_DIR") or ROOT / "data")
+    state_path = data_dir / "state.json"
     state = load_state(state_path)
 
     topic = os.environ.get("NTFY_TOPIC", "").strip()
@@ -284,6 +296,13 @@ def run() -> int:
     for d in best[:20]:
         log.info("  %6.0f₾  %s→%s→%s  %s..%s (%d nights) [%s]", d.price_gel, d.origin, d.destination,
                  d.return_to, d.depart, d.ret, d.nights, d.source)
+
+    try:
+        stats = export_all(data_dir, flights, round_trips, deals, places, settings.to_dict(), conv.rates,
+                           cfg["origins"], now, errors)
+        log.info("Exported for the app: %s", stats)
+    except Exception:  # noqa: BLE001
+        log.exception("Export for the app failed")
 
     sent = notify_deals(best, ntfy, places, conv, settings, state, cfg.get("notifications", {}), now)
     enabled = [s for s, c in cfg.get("sources", {}).items() if c.get("enabled", True)]

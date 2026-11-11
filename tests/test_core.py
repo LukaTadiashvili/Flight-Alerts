@@ -147,3 +147,26 @@ def test_should_notify():
 def test_month_list():
     assert month_list(date(2026, 11, 12), date(2027, 5, 20)) == [
         "2026-11", "2026-12", "2027-01", "2027-02", "2027-03", "2027-04", "2027-05"]
+
+
+def test_export_and_history(tmp_path):
+    import json
+    from zoneinfo import ZoneInfo
+    from flight_alerts.export import export_all
+
+    places = Places(airport_tz={"BUD": "Europe/Budapest"})
+    s = {"max_price_gel": 220}
+    tz = ZoneInfo("Asia/Tbilisi")
+    for day, price in ((0, 100), (1, 100), (2, 80)):
+        now = datetime(2026, 11, 10 + day, 12, tzinfo=tz)
+        fl = [Flight("KUT", "BUD", D0, price, "W6", 0, "", "wizzair", "06:00"),
+              Flight("BUD", "KUT", D0 + timedelta(days=4), 50, "W6", 0, "", "wizzair", "20:00")]
+        deals = combine_one_ways(fl, ["TBS", "KUT"], places, 3, 7, 1)
+        export_all(tmp_path, fl, [], deals, places, s, {"EUR": 3}, ["TBS", "KUT"], now, {})
+    data = json.loads((tmp_path / "flights.json").read_text())
+    hist = json.loads((tmp_path / "history.json").read_text())
+    leg = dict(zip(data["leg_fields"], data["legs"][0]))
+    assert leg["dur"] and leg["est"] == 1 and leg["arr"].startswith("2026-12-05T")   # estimated from distance
+    assert hist["legs"]["KUT|BUD|2026-12-05"] == [["2026-11-10", 100], ["2026-11-12", 80]]  # changes only
+    assert hist["routes"]["BUD"][-1] == ["2026-11-12", 130]
+    assert data["cities"]["BUD"] == "Budapest"

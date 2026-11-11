@@ -4,9 +4,14 @@ on:
   schedule:
     - cron: "23 */6 * * *"   # every 6 hours (UTC)
   workflow_dispatch: {}      # "Run workflow" button for a manual check
+  push:
+    branches: [main]
+    paths: ["web/**"]        # redeploy the app when its code changes
 
 permissions:
-  contents: write            # to commit state/state.json (price history, settings)
+  contents: write            # push the `data` branch (state + price history)
+  pages: write               # publish the web app
+  id-token: write
 
 concurrency:
   group: flight-check
@@ -15,7 +20,12 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v5
 
@@ -26,25 +36,52 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Restore data from the `data` branch
+        run: |
+          mkdir -p data
+          if git fetch --depth 1 origin data; then
+            git archive FETCH_HEAD | tar -x -C data
+            ls -la data
+          else
+            echo "No data branch yet — first run"
+          fi
+
       - name: Search flights and notify
+        if: github.event_name != 'push'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          DATA_DIR: data
         run: python -m flight_alerts
 
-      - name: Save state
-        if: always()
+      - name: Save data to the `data` branch
+        if: always() && github.event_name != 'push'
+        env:
+          TOKEN: ${{ github.token }}
         run: |
+          cd data
+          git init -q -b data
           git config user.name "flight-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/state.json
-          if git diff --staged --quiet; then
-            echo "No state changes"
-          else
-            git commit -m "Update flight state"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
-            git push
-          fi
+          git add -A
+          git commit -q -m "Flight data $(date -u +%Y-%m-%dT%H:%MZ)"
+          # single-commit branch, overwritten every run → the repository never grows
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
+
+      - name: Build site
+        run: |
+          mkdir -p site/data
+          cp -r web/. site/
+          cp data/flights.json data/history.json site/data/ 2>/dev/null || true
+
+      - uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true   # notifications keep working even if Pages isn't enabled yet
 
   tests:
     runs-on: ubuntu-latest

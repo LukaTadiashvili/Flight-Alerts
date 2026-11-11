@@ -16,6 +16,9 @@ class Flight:
     transfers: int = 0
     link: str = ""
     source: str = ""
+    dep_time: str = ""              # local departure time "HH:MM" ("" if unknown)
+    duration_min: int | None = None  # total travel time incl. layovers
+    flight_number: str = ""
 
 
 @dataclass
@@ -36,6 +39,12 @@ class Deal:
     link: str = ""
     source: str = ""
     extra_links: list[tuple[str, str]] = field(default_factory=list)  # (label, url)
+    # only for single round-trip fares
+    dep_time: str = ""
+    ret_time: str = ""
+    duration_to: int | None = None
+    duration_back: int | None = None
+    flight_number: str = ""
 
     @property
     def nights(self) -> int:
