@@ -301,7 +301,7 @@ def run() -> int:
 
     if not state.get("welcomed") and topic:
         ntfy.send("👋 ფრენების მონიტორინგი ჩაირთო",
-                  settings.describe() + f"\n\nშემოწმება ყოველ 6 საათში.\n{HELP}\n"
+                  settings.describe() + f"\n\nშემოწმება დაახლოებით ყოველ 3 საათში.\n{HELP}\n"
                   f"ბრძანებები გაგზავნე თემაზე: {ntfy.settings_topic}",
                   tags=["airplane"], priority=3, actions=ntfy.price_buttons([150, 220, 300]))
         state["welcomed"] = True

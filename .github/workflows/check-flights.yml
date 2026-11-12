@@ -2,7 +2,9 @@ name: Check cheap flights
 
 on:
   schedule:
-    - cron: "23 */6 * * *"   # every 6 hours (UTC)
+    # every 3 hours (UTC). GitHub sometimes delays or skips scheduled runs,
+    # so checking more often keeps data fresh; notifications are de-duplicated.
+    - cron: "23 */3 * * *"
   workflow_dispatch: {}      # "Run workflow" button for a manual check
   push:
     branches: [main]

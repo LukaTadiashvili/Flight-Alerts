@@ -236,3 +236,5 @@ details summary::-webkit-details-marker { display: none; }
 .chip-input span.cur { color: var(--muted); font-size: 14px; }
 .list-head select { -webkit-appearance: none; appearance: none; text-align: right; padding-right: 2px; }
 .row > .input { width: 0; }
+#refreshBtn.spin svg { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

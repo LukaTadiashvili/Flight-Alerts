@@ -70,8 +70,8 @@ function rows(fields, list) {
 async function load() {
   try {
     const [d, h] = await Promise.all([
-      fetch("data/flights.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
-      fetch("data/history.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+      fetch(`data/flights.json?t=${Date.now()}`, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      fetch(`data/history.json?t=${Date.now()}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
     ]);
     S.data = d;
     S.H = { legs: {}, roundtrips: {}, routes: {}, ...h };
@@ -82,9 +82,33 @@ async function load() {
     $("#results").innerHTML = `<div class="empty">მონაცემები ჯერ არ არის.<br>პირველი შემოწმების შემდეგ (GitHub Actions) აქ გამოჩნდება ფრენები.</div>`;
     return false;
   }
-  const g = S.data.generated;
-  $("#updated").textContent = `განახლდა: ${fmtDate(g)} ${g.slice(11, 16)}`;
+  S.loadedAt = Date.now();
+  paintUpdated();
   return true;
+}
+
+function paintUpdated() {
+  if (!S.data) return;
+  const g = S.data.generated;
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(g)) / 60000));
+  const ago = mins < 60 ? `${mins} წთ წინ` : mins < 48 * 60 ? `${Math.round(mins / 60)} სთ წინ` : `${Math.round(mins / 1440)} დღის წინ`;
+  $("#updated").textContent = `განახლდა ${ago} · ${fmtDate(g)} ${g.slice(11, 16)}`;
+}
+
+// pull fresh data: on open/return to the app, every 10 min while open, or on tap
+async function refresh(force = false) {
+  if (!S.f || (!force && Date.now() - (S.loadedAt || 0) < 2 * 60000)) { paintUpdated(); return; }
+  const btn = $("#refreshBtn");
+  btn && btn.classList.add("spin");
+  const before = S.data && S.data.generated;
+  if (await load()) {
+    if (S.data.generated !== before) {
+      buildForm(); syncForm(); renderTrips();
+      if ($("#tab-history").classList.contains("active")) renderHistory();
+      if ($("#tab-settings").classList.contains("active")) renderSettings();
+    }
+  }
+  btn && btn.classList.remove("spin");
 }
 
 // ------------------------------------------------------------------ trips
@@ -647,5 +671,10 @@ async function main() {
   renderTrips();
   openFromHash();
   addEventListener("hashchange", openFromHash);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+  addEventListener("pageshow", (e) => { if (e.persisted) refresh(); });
+  setInterval(() => refresh(true), 10 * 60000);
+  setInterval(paintUpdated, 60000);
+  $("#refreshBtn").onclick = () => refresh(true);
 }
 main();
