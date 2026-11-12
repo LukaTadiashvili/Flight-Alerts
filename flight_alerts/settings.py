@@ -7,6 +7,8 @@ Send any of these to the settings topic (case-insensitive, Georgian works too):
     transfers 1    / გადაჯდომა 1             → allow up to 1 transfer
     pause          / პაუზა                   → stop notifications
     resume         / ჩართვა                  → resume notifications
+    quiet 0-9      / მშვიდი 0-9              → no notifications 00:00–09:00 (sent in the morning)
+    quiet off      / მშვიდი გამორთვა         → notifications any time
     status         / სტატუსი                 → send current settings
 """
 from __future__ import annotations
@@ -22,6 +24,8 @@ class Settings:
     max_nights: int = 7
     max_transfers: int = 1
     paused: bool = False
+    quiet_from: int = 0      # quiet hours, Tbilisi time: no notifications from..to (to is exclusive)
+    quiet_to: int = 9        # equal values = quiet hours off
 
     @classmethod
     def from_state(cls, defaults: dict, stored: dict | None) -> "Settings":
@@ -31,6 +35,12 @@ class Settings:
                 setattr(s, k, v)
         return s
 
+    def is_quiet(self, hour: int) -> bool:
+        a, b = int(self.quiet_from) % 24, int(self.quiet_to) % 24
+        if a == b:
+            return False
+        return a <= hour < b if a < b else (hour >= a or hour < b)
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -38,11 +48,16 @@ class Settings:
         tr = "მხოლოდ პირდაპირი" if self.max_transfers == 0 else f"მაქს. {self.max_transfers} გადაჯდომა"
         state = "⏸ პაუზაზეა" if self.paused else "▶️ აქტიურია"
         return (f"{state}\n💰 ზღვარი: {self.max_price_gel:g}₾ (წასვლა+დაბრუნება)\n"
-                f"🌙 {self.min_nights}–{self.max_nights} ღამე\n✈️ {tr}")
+                f"🌙 {self.min_nights}–{self.max_nights} ღამე\n✈️ {tr}\n{self.quiet_text()}")
+
+    def quiet_text(self) -> str:
+        if int(self.quiet_from) % 24 == int(self.quiet_to) % 24:
+            return "🔔 მშვიდი საათები: გამორთულია"
+        return f"😴 მშვიდი საათები: {int(self.quiet_from):02d}:00–{int(self.quiet_to):02d}:00"
 
 
 HELP = ("ბრძანებები: «200» (ზღვარი ლარში), «ღამე 3-7», «პირდაპირი», "
-        "«გადაჯდომა 1», «პაუზა», «ჩართვა», «სტატუსი»")
+        "«გადაჯდომა 1», «მშვიდი 0-9», «პაუზა», «ჩართვა», «სტატუსი»")
 
 _NUM = r"(\d{2,5})"
 
@@ -64,6 +79,17 @@ def apply_command(settings: Settings, text: str) -> tuple[bool, str]:
             return False, "❓ ღამეები 1–30 შუალედში უნდა იყოს"
         settings.min_nights, settings.max_nights = a, b
         return True, f"✅ მოგზაურობის ხანგრძლივობა: {a}–{b} ღამე"
+
+    if t in ("quiet off", "მშვიდი გამორთვა", "მშვიდი არა", "მშვიდი off"):
+        settings.quiet_from = settings.quiet_to = 0
+        return True, "🔔 მშვიდი საათები გამორთულია — შეტყობინებები ნებისმიერ დროს"
+
+    if m := re.fullmatch(r"(?:quiet|მშვიდი)\s*[:=]?\s*(\d{1,2})(?::00)?\s*[-–—]\s*(\d{1,2})(?::00)?", t):
+        a, b = int(m.group(1)), int(m.group(2))
+        if a > 24 or b > 24:
+            return False, "❓ საათები 0–24 უნდა იყოს, მაგ. «მშვიდი 0-9»"
+        settings.quiet_from, settings.quiet_to = a % 24, b % 24
+        return True, f"✅ {settings.quiet_text()} — ამ დროს ნაპოვნ ფრენებს მერე გამოგიგზავნი"
 
     if t in ("direct", "პირდაპირი", "პირდაპირ"):
         settings.max_transfers = 0

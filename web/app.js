@@ -493,11 +493,14 @@ function renderSettings() {
     <div class="stats" style="margin:0">
       <span>სტატუსი<b>${s.paused ? "პაუზაზე" : "აქტიური"}</b></span><span>ზღვარი<b>${s.max_price_gel}₾</b></span>
       <span>ღამეები<b>${s.min_nights}–${s.max_nights}</b></span><span>გადაჯდომა<b>${s.max_transfers === 0 ? "არა" : `მაქს. ${s.max_transfers}`}</b></span>
+      <span>მშვიდი საათები<b>${(s.quiet_from ?? 0) === (s.quiet_to ?? 9) ? "გამორთული" : `${String(s.quiet_from ?? 0).padStart(2, "0")}–${String(s.quiet_to ?? 9).padStart(2, "0")}`}</b></span>
     </div>` : "";
   $("#setPrice").value = s.max_price_gel ?? "";
   $("#setNMin").value = s.min_nights ?? "";
   $("#setNMax").value = s.max_nights ?? "";
   $("#setTr").value = String(s.max_transfers ?? 1);
+  $("#setQFrom").value = s.quiet_from ?? 0;
+  $("#setQTo").value = s.quiet_to ?? 9;
   $("#topic").value = store.get("topic", "");
   if (S.data) {
     const errs = Object.entries(S.data.errors || {});
@@ -516,6 +519,7 @@ async function sendCommand(cmd) {
     price: () => $("#setPrice").value,
     nights: () => `ღამე ${$("#setNMin").value}-${$("#setNMax").value}`,
     transfers: () => ($("#setTr").value === "0" ? "პირდაპირი" : `გადაჯდომა ${$("#setTr").value}`),
+    quiet: () => `მშვიდი ${+$("#setQFrom").value || 0}-${+$("#setQTo").value || 0}`,
     pause: () => "პაუზა", resume: () => "ჩართვა", status: () => "სტატუსი",
   }[cmd]();
   out.textContent = "იგზავნება…";

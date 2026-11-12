@@ -259,19 +259,25 @@ def notify_deals(deals: list[Deal], ntfy: Ntfy, places: Places, conv: Converter,
     return len(fresh)
 
 
-def report_source_health(errors: dict[str, str], state: dict, ntfy: Ntfy, sources: list[str]) -> None:
+def report_source_health(errors: dict[str, str], state: dict, ntfy: Ntfy, sources: list[str],
+                         quiet: bool = False) -> None:
     health = state.setdefault("source_failures", {})
+    alerted = set(state.get("source_alerted", []))
     for s in sources:
         if s in errors:
             health[s] = health.get(s, 0) + 1
-            if health[s] == SOURCE_FAIL_ALERT_AFTER:
+            if health[s] >= SOURCE_FAIL_ALERT_AFTER and s not in alerted and not quiet:
                 ntfy.send(f"⚠️ {s} არ მუშაობს",
                           f"{s} უკვე {health[s]} შემოწმებაა ვერ იტვირთება.\nშეცდომა: {errors[s]}",
                           tags=["warning"], priority=3)
+                alerted.add(s)
         else:
-            if health.get(s, 0) >= SOURCE_FAIL_ALERT_AFTER:
-                ntfy.send(f"✅ {s} ისევ მუშაობს", "წყარო აღდგა.", tags=["white_check_mark"], priority=2)
+            if s in alerted:
+                if not quiet:
+                    ntfy.send(f"✅ {s} ისევ მუშაობს", "წყარო აღდგა.", tags=["white_check_mark"], priority=2)
+                alerted.discard(s)
             health[s] = 0
+    state["source_alerted"] = sorted(alerted)
 
 
 # ---------------------------------------------------------------- main
@@ -334,10 +340,16 @@ def run() -> int:
     except Exception:  # noqa: BLE001
         log.exception("Export for the app failed")
 
-    sent = notify_deals(best, ntfy, places, conv, settings, state, cfg.get("notifications", {}), now)
+    quiet = settings.is_quiet(now.hour)
+    if quiet:
+        # deals are not marked as notified, so the first check after quiet hours sends them
+        log.info("Quiet hours (%s) — %d deal(s) will be sent later", settings.quiet_text(), len(best))
+        sent = 0
+    else:
+        sent = notify_deals(best, ntfy, places, conv, settings, state, cfg.get("notifications", {}), now)
     # Wizz Air direct is best-effort (its fares also come through Travelpayouts) — no alerts for it
     enabled = [s for s, c in cfg.get("sources", {}).items() if c.get("enabled", True) and s != "wizzair"]
-    report_source_health(errors, state, ntfy, enabled)
+    report_source_health(errors, state, ntfy, enabled, quiet)
 
     # prune old notification records
     state["notified"] = {k: v for k, v in state.get("notified", {}).items()

@@ -113,6 +113,13 @@
           <button class="btn soft" data-cmd="transfers" type="button">შენახვა</button>
         </div>
       </label>
+      <label class="field">მშვიდი საათები (ამ დროს შეტყობინება არ მოვა, დილით მოვა)
+        <div class="row">
+          <input class="input" id="setQFrom" type="number" inputmode="numeric" min="0" max="23"><span class="sep">:00 –</span>
+          <input class="input" id="setQTo" type="number" inputmode="numeric" min="0" max="24"><span class="sep">:00</span>
+          <button class="btn soft" data-cmd="quiet" type="button">შენახვა</button>
+        </div>
+      </label>
       <div class="row" style="margin-top:16px">
         <button class="btn" style="flex:1" data-cmd="pause" type="button">პაუზა</button>
         <button class="btn" style="flex:1" data-cmd="resume" type="button">ჩართვა</button>

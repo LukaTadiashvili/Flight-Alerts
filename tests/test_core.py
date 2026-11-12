@@ -206,3 +206,32 @@ def test_per_route_search_uses_seen_destinations():
     tp = TP()
     per_route_search(tp, ["TBS", "KUT"], [f("TBS", "BER", 0, 50), f("ATH", "KUT", 3, 50)], 200)
     assert set(tp.calls) == {("TBS", "BER"), ("BER", "TBS"), ("KUT", "ATH"), ("ATH", "KUT")}
+
+
+def test_quiet_hours():
+    s = Settings()
+    assert s.is_quiet(0) and s.is_quiet(8) and not s.is_quiet(9) and not s.is_quiet(23)
+    assert apply_command(s, "მშვიდი 23-7")[0] and s.is_quiet(23) and s.is_quiet(3) and not s.is_quiet(7)
+    assert apply_command(s, "quiet 0:00-9:00")[0] and (s.quiet_from, s.quiet_to) == (0, 9)
+    assert apply_command(s, "მშვიდი გამორთვა")[0] and not any(s.is_quiet(h) for h in range(24))
+    assert not apply_command(s, "მშვიდი 30-9")[0]
+    assert apply_command(s, "ღამე 3-7")[0] and (s.min_nights, s.max_nights) == (3, 7)  # still nights
+
+
+def test_source_alert_deferred_during_quiet_hours():
+    from flight_alerts.main import SOURCE_FAIL_ALERT_AFTER, report_source_health
+
+    class N:
+        def __init__(self):
+            self.titles = []
+        def send(self, title, *a, **k):
+            self.titles.append(title)
+    n, st = N(), {}
+    for _ in range(SOURCE_FAIL_ALERT_AFTER + 1):
+        report_source_health({"tp": "down"}, st, n, ["tp"], quiet=True)
+    assert n.titles == []                          # nothing at night
+    report_source_health({"tp": "down"}, st, n, ["tp"], quiet=False)
+    report_source_health({"tp": "down"}, st, n, ["tp"], quiet=False)
+    assert len(n.titles) == 1 and "არ მუშაობს" in n.titles[0]   # once, in the morning
+    report_source_health({}, st, n, ["tp"], quiet=False)
+    assert "ისევ მუშაობს" in n.titles[-1]
