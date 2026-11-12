@@ -2,9 +2,13 @@ name: Check cheap flights
 
 on:
   schedule:
-    # every 3 hours (UTC). GitHub sometimes delays or skips scheduled runs,
-    # so checking more often keeps data fresh; notifications are de-duplicated.
-    - cron: "23 */3 * * *"
+    # Twice a day. Times are UTC; Georgia is UTC+4.
+    - cron: "17 5 * * *"     # 09:17 Tbilisi  — main morning check
+    - cron: "17 17 * * *"    # 21:17 Tbilisi  — main evening check
+    # Backups: GitHub sometimes skips scheduled runs. These only search if the
+    # main check did not happen (no successful check in the last 6 hours).
+    - cron: "47 7 * * *"     # 11:47 Tbilisi
+    - cron: "47 19 * * *"    # 23:47 Tbilisi
   workflow_dispatch: {}      # "Run workflow" button for a manual check
   push:
     branches: [main]
@@ -48,8 +52,30 @@ jobs:
             echo "No data branch yet — first run"
           fi
 
+      - name: Decide whether to search
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          CRON: ${{ github.event.schedule }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone, timedelta
+          search = os.environ["EVENT"] != "push"
+          if os.environ["EVENT"] == "schedule" and os.environ["CRON"].startswith("47 "):
+              try:
+                  at = json.load(open("data/state.json"))["last_run"]["at"]
+                  age = datetime.now(timezone.utc) - datetime.fromisoformat(at)
+                  search = age > timedelta(hours=6)
+                  print(f"Backup run: last check {age} ago → search={search}")
+              except Exception as exc:
+                  print("No previous check found:", exc)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"search={'true' if search else 'false'}\n")
+          PY
+
       - name: Search flights and notify
-        if: github.event_name != 'push'
+        if: steps.decide.outputs.search == 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
@@ -57,7 +83,7 @@ jobs:
         run: python -m flight_alerts
 
       - name: Save data to the `data` branch
-        if: always() && github.event_name != 'push'
+        if: always() && steps.decide.outputs.search == 'true'
         env:
           TOKEN: ${{ github.token }}
         run: |
@@ -71,17 +97,20 @@ jobs:
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
 
       - name: Build site
+        if: github.event_name == 'push' || steps.decide.outputs.search == 'true'
         run: |
           mkdir -p site/data
           cp -r web/. site/
           cp data/flights.json data/history.json site/data/ 2>/dev/null || true
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'push' || steps.decide.outputs.search == 'true'
         continue-on-error: true
         with:
           path: site
 
       - id: deploy
+        if: github.event_name == 'push' || steps.decide.outputs.search == 'true'
         uses: actions/deploy-pages@v4
         continue-on-error: true   # notifications keep working even if Pages isn't enabled yet
 
