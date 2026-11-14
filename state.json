@@ -1,0 +1,207 @@
+{
+  "last_command_time": 1794463044,
+  "last_run": {
+    "at": "2026-11-14T16:15+04:00",
+    "cheapest": "146₾ KUT-LCA-KUT 2027-02-03..2027-02-08",
+    "errors": {
+      "wizzair": "Wizz Air is answering 503 (busy) — stopped for this run"
+    },
+    "legs": 17963,
+    "notified": 0,
+    "seconds": 102,
+    "trips": 26813,
+    "under_limit": 16
+  },
+  "notified": {
+    "ANK": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-01-11",
+      "price": 283.17,
+      "ret": "2027-01-18",
+      "route": "TBS-ESB-TBS"
+    },
+    "ATH": {
+      "at": "2026-11-13T17:11:53.440776+04:00",
+      "depart": "2027-02-15",
+      "price": 203.41,
+      "ret": "2027-02-22",
+      "route": "KUT-ATH-KUT"
+    },
+    "BRU": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-02-28",
+      "price": 280.28,
+      "ret": "2027-03-07",
+      "route": "KUT-CRL-KUT"
+    },
+    "BTS": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-05-13",
+      "price": 283.17,
+      "ret": "2027-05-20",
+      "route": "KUT-BTS-KUT"
+    },
+    "BUD": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-01-26",
+      "price": 297.62,
+      "ret": "2027-01-30",
+      "route": "KUT-BUD-KUT"
+    },
+    "EVN": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2026-12-13",
+      "price": 288.95,
+      "ret": "2026-12-19",
+      "route": "TBS-EVN-KUT"
+    },
+    "GVA": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-03-02",
+      "price": 234.05,
+      "ret": "2027-03-05",
+      "route": "TBS-GVA-TBS"
+    },
+    "IST": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2026-12-25",
+      "price": 277.39,
+      "ret": "2026-12-31",
+      "route": "KUT-SAW-KUT"
+    },
+    "KTW": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2026-12-04",
+      "price": 234.05,
+      "ret": "2026-12-08",
+      "route": "KUT-KTW-KUT"
+    },
+    "LCA": {
+      "at": "2026-11-12T01:17:11.731877+04:00",
+      "depart": "2027-01-29",
+      "price": 141.59,
+      "ret": "2027-02-01",
+      "route": "KUT-LCA-KUT"
+    },
+    "MIL": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-02-15",
+      "price": 228.27,
+      "ret": "2027-02-21",
+      "route": "KUT-MXP-TBS"
+    },
+    "POZ": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2026-12-26",
+      "price": 236.94,
+      "ret": "2027-01-02",
+      "route": "KUT-POZ-KUT"
+    },
+    "ROM": {
+      "at": "2026-11-13T17:11:53.440776+04:00",
+      "depart": "2027-02-07",
+      "price": 289.35,
+      "ret": "2027-02-10",
+      "route": "KUT-FCO-KUT"
+    },
+    "SKG": {
+      "at": "2026-11-12T01:17:11.731877+04:00",
+      "depart": "2027-02-14",
+      "price": 173.37,
+      "ret": "2027-02-21",
+      "route": "KUT-SKG-KUT"
+    },
+    "VCE": {
+      "at": "2026-11-12T01:41:37.957781+04:00",
+      "depart": "2027-02-16",
+      "price": 222.49,
+      "ret": "2027-02-23",
+      "route": "KUT-VCE-KUT"
+    },
+    "WAW": {
+      "at": "2026-11-12T10:30:04.438238+04:00",
+      "depart": "2027-01-18",
+      "price": 190.71,
+      "ret": "2027-01-22",
+      "route": "KUT-WAW-KUT"
+    }
+  },
+  "rates": {
+    "AED": 0.70607,
+    "AMD": 0.0071947,
+    "AUD": 1.7604,
+    "AZN": 1.5258,
+    "BRL": 0.4599,
+    "BYN": 0.8675,
+    "CAD": 1.8176,
+    "CHF": 3.0962,
+    "CNY": 0.38869,
+    "CZK": 0.11739,
+    "DKK": 0.38323999999999997,
+    "EGP": 0.048549999999999996,
+    "EUR": 2.8649,
+    "GBP": 3.4287,
+    "HKD": 0.33054,
+    "HUF": 0.007828,
+    "ILS": 0.80968,
+    "INR": 0.027517,
+    "IRR": 1.36e-06,
+    "ISK": 0.021002999999999997,
+    "JPY": 0.016214,
+    "KGS": 0.029654,
+    "KRW": 0.0019406,
+    "KWD": 8.3228,
+    "KZT": 0.005829999999999999,
+    "MDL": 0.14264,
+    "NOK": 0.27107000000000003,
+    "NZD": 1.4344,
+    "PLN": 0.64989,
+    "QAR": 0.71142,
+    "RON": 0.53549,
+    "RSD": 0.024355,
+    "RUB": 0.03154,
+    "SEK": 0.25813,
+    "SGD": 2.0137,
+    "TJS": 0.28182999999999997,
+    "TMT": 0.74097,
+    "TRY": 0.0515,
+    "UAH": 0.05708,
+    "USD": 2.5934,
+    "UZS": 0.0002158,
+    "ZAR": 0.15355000000000002
+  },
+  "seen_command_ids": [
+    "1rfa66LvFzAh",
+    "4VvnclIPdg2x",
+    "5ymeUbZLwTZd",
+    "8CbedYNhonVV",
+    "9WiBWUNpi5VM",
+    "9w5dSBi8fqnF",
+    "AtNca4hK7QcX",
+    "EcKnOAARahkO",
+    "ICnmVAguqSLx",
+    "MBJMKSXDV1cj",
+    "Mi6aUGmyqqpl",
+    "N3DhhAX6RAJ7",
+    "dtP44157Q2up",
+    "izs2XZyNbASw",
+    "jDvbDQLoREpT",
+    "kJFsIkUEHrjW",
+    "z8oDm4VPtBMr"
+  ],
+  "settings": {
+    "max_nights": 7,
+    "max_price_gel": 300,
+    "max_transfers": 1,
+    "min_nights": 3,
+    "paused": false,
+    "quiet_from": 0,
+    "quiet_to": 9
+  },
+  "source_alerted": [],
+  "source_failures": {
+    "travelpayouts": 0,
+    "wizzair": 1
+  },
+  "welcomed": true
+}
